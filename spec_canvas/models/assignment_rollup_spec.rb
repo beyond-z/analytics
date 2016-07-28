@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2014 Instructure, Inc.
+# Copyright (C) 2015 Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -16,12 +16,16 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-require 'analytics/extensions/accounts_controller'
-require 'analytics/extensions/courses_controller'
-require 'analytics/extensions/context_controller'
-require 'analytics/extensions/course'
-require 'analytics/extensions/enrollment'
-require 'analytics/extensions/grade_calculator'
-require 'analytics/extensions/page_view'
-require 'analytics/extensions/permissions'
-require 'analytics/extensions/user'
+require_relative '../../../../../spec/spec_helper'
+
+describe AssignmentRollup do
+  describe "build" do
+    it "should work with a missing external tool assignment" do
+      assignment_model(due_at: 1.day.ago, submission_types: "external_tool")
+      submission_model(assignment: @assignment, submitted_at: nil)
+      rollup = AssignmentRollup.build(@course, @assignment)
+      rollup = rollup[@course.default_section.id]
+      expect(rollup.missing_submissions).to eql(1.0)
+    end
+  end
+end

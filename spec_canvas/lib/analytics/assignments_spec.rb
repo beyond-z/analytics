@@ -16,7 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-require File.expand_path('../../../../../../spec/spec_helper', File.dirname(__FILE__))
+require_relative '../../../../../../spec/spec_helper'
 
 module Analytics
 
@@ -111,7 +111,7 @@ module Analytics
     end
 
     describe '#assignment_rollups_for' do
-      let(:this_course) { course }
+      let(:this_course) { course_shim }
       let(:sections) { this_course.course_sections }
       let(:section_ids) { sections.map(&:id) }
       let!(:assignment) { this_course.assignments.create!(:points_possible=>100, :due_at => Date.today) }
@@ -166,13 +166,7 @@ module Analytics
         @course.reload
       end
 
-      it "returns all assignments without differentiated assignments" do
-        harness = AssignmentsHarness.new(@course, @student)
-        expect(harness.assignment_scope.length).to eq @course.assignments.length
-      end
-
       it "returns only visible assignments with differentiated assignments" do
-        @course.enable_feature!(:differentiated_assignments)
         harness = AssignmentsHarness.new(@course, @student)
         expect(harness.assignment_scope.length).to eq 1
       end

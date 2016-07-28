@@ -37,13 +37,13 @@ module Analytics
     def available?
       # not slaved because it's pretty lightweight and we don't want it to
       # depend on the slave being present
-      cache(:available) { enrollment_scope.first.present? }
+      cache(:available) { enrollment_scope.exists? }
     end
 
     def enrollments
       @enrollments ||= slaved do
         rows = enrollment_scope.to_a
-        ActiveRecord::Associations::Preloader.new(rows, [ :course_section, {:course => :enrollment_term} ]).run
+        ActiveRecord::Associations::Preloader.new.preload(rows, [ :course_section, {:course => :enrollment_term} ])
         rows
       end
     end
@@ -88,7 +88,7 @@ module Analytics
     def student_ids
       slaved(:cache_as => :student_ids) do
         # id of any user with an enrollment, order unimportant
-        enrollment_scope.uniq.pluck(:user_id)
+        enrollment_scope.distinct.pluck(:user_id)
       end
     end
 
@@ -136,9 +136,9 @@ module Analytics
       collection.format do |student|
         {
           :id => student.id,
-          :page_views => page_view_counts[student.id][:page_views],
+          :page_views => page_view_counts[student.id].try(:[], :page_views),
           :max_page_views => analysis.max_page_views,
-          :participations => page_view_counts[student.id][:participations],
+          :participations => page_view_counts[student.id].try(:[], :participations),
           :max_participations => analysis.max_participations,
           :tardiness_breakdown => tardiness_breakdowns[:students][student.id].as_hash
         }
@@ -162,12 +162,12 @@ module Analytics
     end
 
     def enrollment_scope
-      @enrollment_scope ||= @course.enrollments_visible_to(@current_user, :include_priors => true).
+      @enrollment_scope ||= @course.apply_enrollment_visibility(@course.all_student_enrollments, @current_user).
         where(:enrollments => { :workflow_state => ['active', 'completed'] })
     end
 
     def submissions(assignments, student_ids=self.student_ids)
-      @course.shard.activate{ submission_scope(assignments, student_ids).all }
+      @course.shard.activate{ submission_scope(assignments, student_ids).to_a }
     end
 
     def submission_scope(assignments, student_ids=self.student_ids)
@@ -183,7 +183,7 @@ module Analytics
     def student_scope
       @student_scope ||= begin
         # any user with an enrollment, ordered by name
-        subselect = enrollment_scope.select([:user_id, :computed_current_score]).uniq.to_sql
+        subselect = enrollment_scope.select([:user_id, :computed_current_score]).distinct.to_sql
         User.
           select("users.*, enrollments.computed_current_score").
           joins("INNER JOIN (#{subselect}) AS enrollments ON enrollments.user_id=users.id")
@@ -194,7 +194,7 @@ module Analytics
       cache_array = [:raw_assignments]
       cache_array << @current_user if differentiated_assignments_applies?
       slaved(:cache_as => cache_array) do
-        assignment_scope.all
+        assignment_scope.to_a
       end
     end
 

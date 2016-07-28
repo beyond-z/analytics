@@ -17,21 +17,15 @@
 #
 
 module GraphColors
-  FRAME = "#959595".freeze
-  GRID = "#cccccc".freeze
-  BLUE = "#33acdf".freeze
-  ORANGE = "#f59331".freeze
-  LIGHT_BLUE = "#c1e6f5".freeze
-  LIGHT_GREEN = "#95ee86".freeze
-  DARK_GREEN = "#2fa23e".freeze
-  SHARP_GREEN = "#8cd20d".freeze
-  LIGHT_YELLOW = "#efe33e".freeze
-  DARK_YELLOW = "#b3a700".freeze
-  SHARP_YELLOW = "#f6bd00".freeze
-  LIGHT_RED = "#dea8a9".freeze
-  DARK_RED = "#da181d".freeze
-  SHARP_RED = "#d21d1a".freeze
+  FRAME = "#555555".freeze
+  BLUE = "#7eb5ce".freeze
+  LIGHT_BLUE = "#a9c8d6".freeze
+  DARK_BLUE = "#114055".freeze
+  SHARP_GREEN = "#70a80b".freeze
+  SHARP_YELLOW = "#e6bb00".freeze
+  SHARP_RED = "#ba1a17".freeze
   NONE = "#cccccc".freeze
+  BACKGROUND = "#ffffff".freeze
 end
 
 shared_examples_for "analytics tests" do
@@ -88,12 +82,14 @@ shared_examples_for "analytics tests" do
   end
 
   def add_students_to_course(number_to_add)
+    @already_added_students ||= 0
     added_students = []
     number_to_add.times do |i|
-      student = User.create!(:name => "analytics_student_#{i}")
+      student = User.create!(:name => "analytics_student_#{i + @already_added_students}")
       @course.enroll_student(student).accept!
       added_students.push(student)
     end
+    @already_added_students += number_to_add
     added_students
   end
 
@@ -115,7 +111,7 @@ shared_examples_for "analytics tests" do
 
   def validate_tooltip_text(css_selector, text)
     driver.execute_script("$('#{css_selector}').mouseover()")
-    tooltip = f('.analytics-tooltip')
+    tooltip = find('.analytics-tooltip')
     expect(tooltip).to include_text(text)
     tooltip
   end
@@ -130,7 +126,7 @@ shared_examples_for "analytics tests" do
   end
 
   def current_student_score
-    StudentEnrollment.last.computed_current_score.to_s
+    "%g" % StudentEnrollment.last.computed_current_score
   end
 
   def setup_for_grades_graph
@@ -163,31 +159,42 @@ shared_examples_for "analytics tests" do
   end
 
   def student_roster
-    ff('.student_roster .user')
+    ff('.roster .StudentEnrollment')
   end
 
   def right_nav_buttons
     ff('#right_nav a')
   end
 
+  def analytics_nav_button
+    right_nav_buttons.detect do |button|
+      button.text.strip.include? 'Analytics'
+    end
+  end
+
   def validate_analytics_button_exists(exists = true)
     student = StudentEnrollment.last.user
     get "/courses/#{@course.id}/users/#{student.id}"
-    exists ? (expect(right_nav_buttons[0].text.strip).to eq "Analytics") : right_nav_buttons.each { |right_nav_button| expect(right_nav_button).not_to include_text(ANALYTICS_BUTTON_TEXT) }
+    buttons = right_nav_buttons.map { |button| button.text.strip }
+    if exists
+      expect(buttons).to include "Analytics"
+    else
+      expect(buttons).not_to include "Analytics"
+    end
   end
 
   def validate_analytics_icons_exist(exist = true)
     get "/courses/#{@course.id}/users"
     wait_for_ajaximations
     if !exist
-      expect(ff(ANALYTICS_BUTTON_CSS)).to be_empty
+      expect(f("#content")).not_to contain_css(ANALYTICS_ICON_CSS)
     else
-      expect(ff(ANALYTICS_BUTTON_CSS).count).to eq student_roster.count
+      expect(ff(ANALYTICS_ICON_CSS).count).to eq student_roster.count
     end
   end
 
   def validate_student_display(student_name)
-    expect(f('.student_summary')).to include_text(student_name)
+    expect(find('.student_summary')).to include_text(student_name)
   end
 
   shared_examples_for "analytics permissions specs" do
@@ -227,7 +234,7 @@ shared_examples_for "analytics tests" do
     it "should validate the graph color when a student took action on that day" do
       page_view(:user => @student, :course => @course, :participated => true)
       go_to_analytics(analytics_url)
-      validate_element_fill(get_rectangle(Time.now), GraphColors::ORANGE)
+      validate_element_fill(get_rectangle(Time.now), GraphColors::DARK_BLUE)
       validate_tooltip_text(date_selector(Time.now), '1 participation')
     end
 
@@ -242,8 +249,8 @@ shared_examples_for "analytics tests" do
         rect = get_rectangle(date)
         rectangles.push(rect)
       end
-      validate_element_fill(rectangles[0], GraphColors::ORANGE)
-      validate_element_fill(rectangles[1], GraphColors::BLUE)
+      validate_element_fill(rectangles[0], GraphColors::DARK_BLUE)
+      validate_element_fill(rectangles[1], GraphColors::LIGHT_BLUE)
     end
   end
 end

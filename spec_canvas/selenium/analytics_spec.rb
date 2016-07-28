@@ -16,14 +16,13 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-require File.expand_path(File.dirname(__FILE__) + '/../../../../../spec/selenium/common')
-require File.expand_path(File.dirname(__FILE__) + '/analytics_common')
+require_relative '../../../../../spec/selenium/common'
+require_relative 'analytics_common'
 
 describe "analytics" do
   include_examples "analytics tests"
 
-  ANALYTICS_BUTTON_CSS = '.analytics-grid-button'
-  ANALYTICS_BUTTON_TEXT = 'Analytics'
+  ANALYTICS_ICON_CSS = '.roster .icon-analytics'
 
   describe "course view" do
 
@@ -37,17 +36,27 @@ describe "analytics" do
       end
 
       it "should validate analytics icon link works" do
-        skip("new course users page doesn't have this link yet, known issue")
         get "/courses/#{@course.id}/users"
-
-        expect_new_page_load { student_roster[0].find_element(:css, ANALYTICS_BUTTON_CSS).click }
+        expect_new_page_load do
+          student_roster[0].find_element(:css, ".al-trigger").click
+          f('.al-options .ui-menu-item .icon-analytics').find_element(:xpath, '..').click
+        end
         validate_student_display(@student.name)
       end
 
       it "should validate analytics button link works" do
         get "/courses/#{@course.id}/users/#{@student.id}"
 
-        expect_new_page_load { right_nav_buttons[0].click }
+        expect_new_page_load { analytics_nav_button.click }
+        validate_student_display(@student.name)
+      end
+
+      it "should validate analytics button link works with profiles enabled" do
+        @course.root_account.settings[:enable_profiles] = true
+        @course.root_account.save!
+        get "/courses/#{@course.id}/users/#{@student.id}"
+
+        expect_new_page_load { analytics_nav_button.click }
         validate_student_display(@student.name)
       end
     end
@@ -126,7 +135,7 @@ describe "analytics" do
       randomly_grade_assignments(5)
       go_to_analytics("/courses/#{@course.id}/analytics/users/#{@student.id}")
 
-      expect(f('.student_summary')).to include_text(current_student_score)
+      expect(find('.student_summary')).to include_text(current_student_score)
     end
 
     context 'participation view' do
@@ -152,9 +161,12 @@ describe "analytics" do
       end
 
       @teacher_conversation = @teacher.initiate_conversation([@student])
-      @student_conversation = @student.initiate_conversation([@teacher])
+      cp = @student_conversation = @student.initiate_conversation([@teacher])
       add_message(@teacher_conversation, 1)
       add_message(@student_conversation, 1)
+
+      ConversationParticipant.where(:id => cp).update_all(:tags => "") # don't use the participants, their tags are unreliable
+
       go_to_analytics("/courses/#{@course.id}/analytics/users/#{@student.id}")
 
       users_css.each { |user_css| validate_tooltip_text(user_css, single_message) }
@@ -177,17 +189,17 @@ describe "analytics" do
       late_submission_diamond = get_diamond(@late_assignment.id)
       on_time_diamond = get_diamond(@on_time_assignment.id)
 
-      validate_element_fill(missed_diamond, GraphColors::DARK_RED)
-      validate_element_fill(late_submission_diamond, GraphColors::DARK_YELLOW)
-      validate_element_fill(on_time_diamond, GraphColors::DARK_GREEN)
-      validate_element_fill(no_due_date_diamond, 'none')
+      validate_element_fill(missed_diamond, GraphColors::SHARP_RED)
+      validate_element_fill(late_submission_diamond, GraphColors::SHARP_YELLOW)
+      validate_element_fill(on_time_diamond, GraphColors::SHARP_GREEN)
+      validate_element_fill(no_due_date_diamond, GraphColors::BACKGROUND)
       validate_element_stroke(no_due_date_diamond, GraphColors::FRAME)
     end
 
     it "should validate grades graph" do
       randomly_grade_assignments(10)
       first_assignment = @course.active_assignments.first
-      first_submission_score = first_assignment.submissions.first.score.to_s
+      first_submission_score = first_assignment.submissions.first.score.to_i.to_s
       validation_text = ['Score: ' + first_submission_score + ' / 100', first_assignment.title]
       setup_for_grades_graph
       go_to_analytics("/courses/#{@course.id}/analytics/users/#{@student.id}")
@@ -200,7 +212,7 @@ describe "analytics" do
       go_to_analytics("/courses/#{@course.id}/analytics/users/#{@student.id}")
 
       driver.execute_script("$('#grades-graph .assignment_#{first_assignment.id}.cover').mouseover()")
-      tooltip = f(".analytics-tooltip")
+      tooltip = find(".analytics-tooltip")
       expect(tooltip.text).to eq first_assignment.title
     end
 
@@ -208,9 +220,9 @@ describe "analytics" do
 
       def validate_combobox_presence(is_present = true)
         if is_present
-          expect(f('.ui-combobox')).to be_displayed
+          expect(find('.ui-combobox')).to be_displayed
         else
-          expect(f('.ui-combobox')).to be_nil
+          expect(f('body')).not_to contain_css('.ui-combobox')
         end
       end
 
@@ -233,12 +245,16 @@ describe "analytics" do
         end
 
         def validate_combobox_name(student_name)
-          expect(f('.ui-selectmenu-status')).to include_text(student_name)
+          select = Selenium::WebDriver::Support::Select.new(find('.students_box select'))
+          wait = Selenium::WebDriver::Wait.new(timeout: 5)
+          wait.until do
+            expect(select.first_selected_option).to include_text(student_name)
+          end
         end
 
         def validate_first_students_grade_graph
           first_assignment = @course.active_assignments.first
-          first_submission_score = first_assignment.submissions.first.score.to_s
+          first_submission_score = first_assignment.submissions.first.score.to_i.to_s
           validation_text = ['Score: ' + first_submission_score + ' / 100', first_assignment.title]
           validation_text.each { |text| validate_tooltip_text("#grades-graph .assignment_#{first_assignment.id}.cover", text) }
         end
@@ -246,8 +262,8 @@ describe "analytics" do
         added_students = add_students_to_course(1)
         graded_assignments = randomly_grade_assignments(5)
         go_to_analytics("/courses/#{@course.id}/analytics/users/#{@student.id}")
-        next_button = f('.ui-combobox-next')
-        prev_button = f('.ui-combobox-prev')
+        next_button = find('.ui-combobox-next')
+        prev_button = find('.ui-combobox-prev')
 
         #check that first student in course is selected
         expect(driver.current_url).to include(@student.id.to_s)
@@ -260,7 +276,7 @@ describe "analytics" do
         select_next_student(next_button, added_students[0])
         validate_combobox_name(added_students[0].name)
         assignment_diamond = get_diamond(graded_assignments[0].id)
-        validate_element_fill(assignment_diamond, GraphColors::DARK_RED)
+        validate_element_fill(assignment_diamond, GraphColors::SHARP_RED)
 
         #change back to the first student
         select_next_student(prev_button, @student)
