@@ -16,8 +16,8 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-require File.expand_path(File.dirname(__FILE__) + '/../../../../../spec/selenium/common')
-require File.expand_path(File.dirname(__FILE__) + '/analytics_common')
+require_relative '../../../../../spec/selenium/common'
+require_relative 'analytics_common'
 
 describe "analytics course view" do
   include_examples "analytics tests"
@@ -49,7 +49,7 @@ describe "analytics course view" do
     it 'should show the analytics button on the course home page' do
       get "/courses/#{@course.id}"
       wait_for_ajaximations
-      expect(f('div.course-options').text).to include("Analytics")
+      expect(find('div.course-options').text).to include("Analytics")
     end
   end
 
@@ -82,24 +82,31 @@ describe "analytics course view" do
 
     it "should validate grades graph" do
       setup_for_grades_graph
-      validation_text = ['High: ' + @first_submission_score, @first_assignment.title]
+      validation_text = ['High: ' + @first_submission_score.to_i.to_s, @first_assignment.title]
       go_to_analytics("/courses/#{@course.id}/analytics")
 
       validation_text.each { |text| validate_tooltip_text("#grades-graph .assignment_#{@first_assignment.id}.cover", text) }
+    end
+
+    describe "graph toggle switch" do
+      it "should hide the graphs and show table when selected" do
+        go_to_analytics("/courses/#{@course.id}/analytics")
+        expect(f('#activities-table')).not_to be_displayed
+        expect(f('.graph')).to be_displayed
+        move_to_click('.AnalyticsToggle label.ic-Super-toggle--ui-switch')
+        expect(f('#activities-table')).to be_displayed
+        expect(f('.graph')).not_to be_displayed
+      end
     end
   end
 
   context "students display" do
 
-    def student_bars(info_bar)
-      ff(info_bar)
-    end
-
     it "should be absent unless the user has permission to see grades" do
       RoleOverride.manage_role_override(@account, 'TeacherEnrollment', 'manage_grades', :override => false)
       RoleOverride.manage_role_override(@account, 'TeacherEnrollment', 'view_all_grades', :override => false)
       go_to_analytics("/courses/#{@course.id}/analytics")
-      expect(f('#students')).to be_nil
+      expect(f('#content')).not_to contain_css('#students')
     end
 
     it "should validate correct number of students are showing up" do
@@ -119,7 +126,7 @@ describe "analytics course view" do
     it "should validate current score display for students" do
       randomly_grade_assignments(5)
       go_to_analytics("/courses/#{@course.id}/analytics")
-      expect(f('div.current_score')).to include_text(current_student_score)
+      expect(find("#student_#{@student.id} .current_score")).to include_text(current_student_score)
     end
 
     it "should display student activity for tomorrow" do
@@ -127,40 +134,22 @@ describe "analytics course view" do
       page_view(:user => @student, :course => @course, :participated => true, :created_at => tomorrow)
 
       go_to_analytics("/courses/#{@course.id}/analytics/users/#{@student.id}")
-      expect(fj("rect.#{Time.now.utc.strftime("%Y-%m-%d")}")).to be_nil
       expect(fj("rect.#{tomorrow.strftime("%Y-%m-%d")}")).to be_displayed
     end
 
-    context 'main bars' do
-
-      before (:each) do
-        @added_students = add_students_to_course(2)
-      end
-
-      it "should validate page views bar for students" do
-        page_view_styles = %w(0% 100% 50%)
-        2.times { page_view(:user => @student, :course => @course) }
-        4.times { page_view(:user => @added_students[0], :course => @course, :participated => true) }
-        go_to_analytics("/courses/#{@course.id}/analytics")
-        student_bars(StudentBars::PAGE_VIEWS).each_with_index { |page_view_bar, i| expect(page_view_bar).to have_attribute(:style, "right: #{page_view_styles[i]}") }
-      end
-
-      it "should validate participation bar for students" do
-        page_view_styles = %w(50% 0% 75%)
-        page_view(:user => @student, :course => @course, :participated => true)
-        2.times { page_view(:user => @added_students[0], :course => @course, :participated => true) }
-        4.times { page_view(:user => @added_students[1], :course => @course, :participated => true) }
-        go_to_analytics("/courses/#{@course.id}/analytics")
-        student_bars(StudentBars::PARTICIPATION).each_with_index { |page_view_bar, i| expect(page_view_bar).to have_attribute(:style, "right: #{page_view_styles[i]}") }
-      end
+    it "should count pageviews" do
+      3.times { page_view(:user => @student, :course => @course) }
+      go_to_analytics("/courses/#{@course.id}/analytics")
+      expect(find("#student_#{@student.id} .page_views")).to include_text('3')
     end
 
-    it "should validate assignments bar for a single student" do
-      expected_classes = %w(onTime late missing)
+    it "should count submissions" do
       setup_variety_assignments(false)
       go_to_analytics("/courses/#{@course.id}/analytics")
-      assignments_regions = student_bars(StudentBars::SUBMISSIONS)
-      expected_classes.each_with_index { |expected_class, i| expect(assignments_regions[i]).to have_class(expected_class) }
+      expect(find("#student_#{@student.id} .submissions")).to include_text('3')
+      expect(find("#student_#{@student.id} .on_time")).to include_text('1')
+      expect(find("#student_#{@student.id} .late")).to include_text('1')
+      expect(find("#student_#{@student.id} .missing")).to include_text('1')
     end
   end
 end

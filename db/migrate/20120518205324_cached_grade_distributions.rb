@@ -2,8 +2,9 @@ class CachedGradeDistributions < ActiveRecord::Migration
   tag :predeploy
 
   def self.up
-    create_table :cached_grade_distributions, :primary_key => 'course_id' do |t|
+    create_table :cached_grade_distributions, {:id => false} do |t|
       t.integer :course_id, :limit => 8, :null => false
+      t.primary_key(:course_id)
       (0..100).each do |i|
         t.integer "s#{i}".to_sym, :default => 0, :null => false
       end

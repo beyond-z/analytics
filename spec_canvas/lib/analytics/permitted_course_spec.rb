@@ -16,7 +16,10 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-require File.expand_path('../../../../../../spec/spec_helper', File.dirname(__FILE__))
+require_relative '../../../../../../spec/spec_helper'
+
+require_dependency 'analytics/permitted_course'
+
 module Analytics
   describe PermittedCourse do
     describe '#assignments' do
@@ -72,7 +75,7 @@ module Analytics
     end
 
     describe "async" do
-      let(:permitted_course) { PermittedCourse.new(user, course) }
+      let(:permitted_course) { PermittedCourse.new(user, course_shim) }
 
       it "reads and saves the data if available in cache" do
         permitted_course.expects(:assignments_uncached).never
@@ -98,6 +101,22 @@ module Analytics
         progress.start!
         progress.complete!
         expect(permitted_course.progress_for_background_assignments).not_to eq progress
+      end
+
+      it "unifies cache check between rails3 and rails4" do
+        enable_cache do
+          assignments = [{id: 1}]
+          Rails.cache.write(permitted_course.assignments_cache_key, assignments, :use_new_rails => false)
+          expect(permitted_course.async_data_available?).to be_truthy
+        end
+      end
+
+      it "unifies cache lookup between rails3 and rails4" do
+        enable_cache do
+          assignments = [{id: 1}]
+          Rails.cache.write(permitted_course.assignments_cache_key, assignments, :use_new_rails => false)
+          expect(permitted_course.assignments).to eq assignments
+        end
       end
     end
   end

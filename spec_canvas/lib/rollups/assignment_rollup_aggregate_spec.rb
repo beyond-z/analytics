@@ -16,7 +16,8 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-require File.expand_path('../../../../../../spec/spec_helper', File.dirname(__FILE__))
+require_relative '../../../../../../spec/spec_helper'
+
 module Rollups
 
   describe AssignmentRollupAggregate do
@@ -39,7 +40,7 @@ module Rollups
       }
     }
 
-    let(:the_course) { course }
+    let(:the_course) { course_shim }
     let(:rollup) { AssignmentRollup.new(rollup_attrs) }
 
     describe 'data from a single rollup' do

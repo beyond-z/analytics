@@ -23,22 +23,33 @@ module Analytics
     # required of host: submissions(assignments)
 
     SUBMISSION_COLUMNS_SELECT = [:id, :assignment_id, :score, :user_id, :submission_type,
-            :submitted_at, :grade, :graded_at, :updated_at, :workflow_state, :cached_due_date]
+            :submitted_at, :grade, :graded_at, :updated_at, :workflow_state, :cached_due_date, :excused]
 
     def assignments
       cache_array = [:assignments, allow_student_details?]
       cache_array << @current_user if differentiated_assignments_applies?
       slaved(:cache_as => cache_array) do
-        assignments = assignment_scope.all
-        submissions = submissions(assignments).group_by{ |s| s.assignment_id }
+        assignments = assignment_scope.to_a
+        submissions = submissions(assignments).group_by { |s| s.assignment_id }
+        assignment_ids = assignments.map(&:id)
+        course_module_tags = @course.context_module_tags.where(
+            content_type: 'Assignment',
+            content_id: assignment_ids,
+            tag_type: 'context_module').select([:content_id, :context_module_id]).reorder(:context_module_id).distinct
+        course_module_tags_hash = {}
+        course_module_tags.each do |t|
+          array = course_module_tags_hash[t.content_id] ||= []
+          array << t.context_module_id
+        end
+
         assignments.map do |assignment|
-          assignment_data(assignment, submissions[assignment.id])
+          assignment_data(assignment, submissions[assignment.id], course_module_tags_hash)
         end
       end
     end
 
     def assignment_rollups_for(section_ids)
-      assignments = assignment_scope.all
+      assignments = assignment_scope.to_a
 
       @course.shard.activate do
         assignments.map do |assignment|
@@ -66,22 +77,27 @@ module Analytics
       this_course.shard.activate do
         scope = this_course.assignments.published
 
-        if differentiated_assignments_applies?(this_course, user)
+        if user && differentiated_assignments_applies?(this_course, user)
           scope = scope.visible_to_students_in_course_with_da(user.id, this_course.id)
         end
 
-        scope.includes(:versions). # Optimizes AssignmentOverrideApplicator
+        scope.preload(:versions). # Optimizes AssignmentOverrideApplicator
               reorder("assignments.due_at, assignments.id")
       end
     end
 
     def self.differentiated_assignments_applies?(course, user)
-      course.feature_enabled?(:differentiated_assignments) && !course.grants_any_right?(user, :read_as_admin, :manage_grades, :manage_assignments)
+      !course.grants_any_right?(user, :read_as_admin, :manage_grades, :manage_assignments)
     end
 
-    def assignment_data(assignment, submissions)
+    def assignment_data(assignment, submissions, course_module_tags_hash=nil)
       submissions ||= []
       real_submissions = submissions.reject{|s| fake_student_ids.include?(s.user_id)}
+
+      module_ids = []
+      if course_module_tags_hash
+        module_ids = course_module_tags_hash[assignment.id] || []
+      end
 
       hash = basic_assignment_data(assignment, submissions).
         merge(:muted => muted(assignment))
@@ -98,7 +114,8 @@ module Analytics
           :min_score => scores.min,
           :first_quartile => quartiles[0],
           :median => quartiles[1],
-          :third_quartile => quartiles[2]
+          :third_quartile => quartiles[2],
+          :module_ids => module_ids
         )
       end
 

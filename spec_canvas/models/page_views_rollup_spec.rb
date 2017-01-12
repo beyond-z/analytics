@@ -16,7 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-require File.expand_path(File.dirname(__FILE__) + '/../../../../../spec/sharding_spec_helper')
+require_relative '../../../../../spec/sharding_spec_helper'
 
 describe PageViewsRollup do
   def create_rollup(opts={})
@@ -168,6 +168,27 @@ describe PageViewsRollup do
         end
       end
     end
+
+    context "non-Date dates" do
+      before :each do
+        @expected_date = Date.new(2016, 6, 21)
+        # Jun 21, 2016 at 3am UTC
+        as_timestamp = @expected_date.in_time_zone('UTC') + 3.hours
+        # Jun 20, 2016 at 9pm MDT
+        @input_timestamp = as_timestamp.in_time_zone('America/Denver')
+        @scope = PageViewsRollup.bin_scope_for(@course)
+      end
+
+      it "should cast to the corresponding UTC date on query" do
+        @scope.expects(:for_dates).with(@expected_date).returns(@scope)
+        PageViewsRollup.bin_for(@scope, @input_timestamp, @category)
+      end
+
+      it "should cast to same corresponding UTC date in new bin" do
+        bin = PageViewsRollup.bin_for(@scope, @input_timestamp, @category)
+        expect(bin.date).to eq @expected_date
+      end
+    end
   end
 
   describe "#augment" do
@@ -199,11 +220,31 @@ describe PageViewsRollup do
       @category = 'other'
 
       bin = mock('bin')
-      PageViewsRollup.stubs(:bin_for).with(@course, @today, @category).returns(bin)
+      scope = mock('scope')
+      scope.stubs(:transaction).yields
+      PageViewsRollup.stubs(:bin_scope_for).with(@course).returns(scope)
+      PageViewsRollup.stubs(:bin_for).with(scope, @today, @category).returns(bin)
+      bin.expects(:new_record?).returns(false)
       bin.expects(:augment).with(5, 2).once
-      bin.expects(:save).once
+      bin.expects(:save!).once
 
       PageViewsRollup.augment!(@course, @today, @category, 5, 2)
+    end
+
+    it 'handles creation race condition' do
+      course = course_model
+      today = Date.today
+      category = 'other'
+
+      scope = PageViewsRollup.bin_scope_for(course)
+      bin1 = PageViewsRollup.bin_for(scope, today, category)
+      bin2 = PageViewsRollup.bin_for(scope, today, category)
+      bin2.save!
+      PageViewsRollup.expects(:bin_scope_for).returns(scope)
+      PageViewsRollup.expects(:bin_for).twice.with(scope, today, category).returns(bin1).
+          then.returns(bin2)
+
+      PageViewsRollup.augment!(course, today, category, 5, 2)
     end
   end
 
@@ -231,7 +272,6 @@ describe PageViewsRollup do
     context "with redis" do
       before(:each) do
         Setting.set("page_view_rollups_method", "redis")
-        Canvas.redis.flushdb
       end
 
       describe ".increment_cached!" do
