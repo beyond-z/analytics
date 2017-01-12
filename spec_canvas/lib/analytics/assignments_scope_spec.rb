@@ -16,8 +16,8 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-require File.expand_path(File.dirname(__FILE__) + '/../../../../../../spec/spec_helper')
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require_relative '../../../../../../spec/spec_helper'
+require_relative '../../spec_helper'
 
 module Analytics
 
@@ -32,7 +32,7 @@ module Analytics
       end
 
       it 'should have versions included' do
-        assignments = harness.assignment_scope.all
+        assignments = harness.assignment_scope.to_a
 
         expect(assignments.size).to eq 3
         assignments.each do |assignment|
@@ -44,7 +44,7 @@ module Analytics
         unpublished_assignment = course.assignments.first
         unpublished_assignment.update_attribute(:workflow_state, 'unpublished')
 
-        assignments = harness.assignment_scope.all
+        assignments = harness.assignment_scope.to_a
         expect(assignments.size).to eq 2
         expect(assignments).not_to include(unpublished_assignment)
       end

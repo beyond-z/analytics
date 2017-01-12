@@ -105,7 +105,7 @@ module Analytics
             group("DATE(created_at), author_id").each do |row|
 
             day = row.day
-            type = ActiveRecord::ConnectionAdapters::Column.value_to_boolean(row.student) ?
+            type = Canvas::Plugin.value_to_boolean(row.student) ?
               :studentMessages :
               :instructorMessages
             count = row.ct.to_i
@@ -157,7 +157,7 @@ module Analytics
     end
 
     def enrollment_scope
-      @enrollment_scope ||= @course.enrollments_visible_to(@current_user, :include_priors => true).
+      @enrollment_scope ||= @course.apply_enrollment_visibility(@course.all_student_enrollments, @current_user).
         where(:workflow_state => ['active', 'completed'], :user_id => @student)
     end
 
@@ -165,8 +165,7 @@ module Analytics
       @course.shard.activate do
         Submission.
           select(Analytics::Assignments::SUBMISSION_COLUMNS_SELECT).
-          where(:assignment_id => assignments).
-          all
+          where(:assignment_id => assignments).to_a
       end
     end
 
@@ -178,10 +177,11 @@ module Analytics
       # conversations related to this course in which the student has a hook
       # TODO: sharding
       @student_conversation_ids ||= ConversationParticipant.
-        tagged("course_#{@course.id}").
+        joins(:conversation).
+        where(Conversation.wildcard('conversations.tags', "course_#{@course.id}", :delimiter => ',')).
         where(:user_id => @student).
         select(:conversation_id).
-        uniq.
+        distinct.
         map(&:conversation_id)
     end
 
@@ -194,7 +194,7 @@ module Analytics
         where(:user_id => instructors).
         where(:conversation_id => student_conversation_ids).
         select(:conversation_id).
-        uniq.
+        distinct.
         map(&:conversation_id)
     end
   end

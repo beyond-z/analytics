@@ -16,8 +16,8 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-require File.expand_path(File.dirname(__FILE__) + '/../../../../../spec/spec_helper')
-require File.expand_path(File.dirname(__FILE__) + '/../cassandra_spec_helper')
+require_relative '../../../../../spec/spec_helper'
+require_relative '../cassandra_spec_helper'
 
 describe Analytics::StudentCollection do
   it "should default sort_strategy to Default" do
@@ -56,7 +56,7 @@ describe Analytics::StudentCollection do
       @enrollments = Array.new(3) { student_in_course(:active_all => true) }
       @users = @enrollments.map(&:user)
       # hide fixtures
-      User.update_all({workflow_state: 'deleted'}, ["id NOT IN (?)", @users.map(&:id)])
+      User.where.not(:id => @users).update_all(workflow_state: 'deleted')
     end
 
     it "should paginate values from the initial scope" do
@@ -91,7 +91,7 @@ describe Analytics::StudentCollection do
       @enrollments = Array.new(enrollment_count) { student_in_course(:active_all => true) }
       @users = @enrollments.map(&:user)
       # hide fixtures
-      User.update_all({workflow_state: 'deleted'}, ["id NOT IN (?)", @users.map(&:id)])
+      User.where.not(:id => @users).update_all(workflow_state: 'deleted')
       @pager = PaginatedCollection::Collection.new
       @pager.current_page = 1
       @pager.per_page = 10
@@ -146,7 +146,7 @@ describe Analytics::StudentCollection do
       before :each do
         assigned_scores = [40, 20, nil, 60]
         assigned_scores.zip(@enrollments).each { |score, enrollment| enrollment.update_attribute(:computed_current_score, score) }
-        @scope = User.active.joins("INNER JOIN enrollments ON enrollments.user_id=users.id")
+        @scope = User.active.joins(:enrollments)
         @strategy = Analytics::StudentCollection::SortStrategy::ByScore.new
         @reverse_strategy = Analytics::StudentCollection::SortStrategy::ByScore.new(:descending)
         @expected_sort = [2, 1, 0, 3].map{ |i| @users[i] }
