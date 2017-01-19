@@ -1,4 +1,4 @@
-class FixCachedGradeDistributionsSequence < ActiveRecord::Migration[4.2]
+class FixCachedGradeDistributionsSequence < ActiveRecord::Migration
   tag :postdeploy
 
   def self.up

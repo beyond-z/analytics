@@ -1,4 +1,4 @@
-class MakeAssignmentRollupsColumnsFloat < ActiveRecord::Migration[4.2]
+class MakeAssignmentRollupsColumnsFloat < ActiveRecord::Migration
   tag :predeploy
 
   def self.up

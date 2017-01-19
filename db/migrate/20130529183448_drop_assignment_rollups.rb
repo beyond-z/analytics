@@ -1,4 +1,4 @@
-class DropAssignmentRollups < ActiveRecord::Migration[4.2]
+class DropAssignmentRollups < ActiveRecord::Migration
   tag :postdeploy
 
   def self.up

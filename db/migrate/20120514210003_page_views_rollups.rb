@@ -1,4 +1,4 @@
-class PageViewsRollups < ActiveRecord::Migration[4.2]
+class PageViewsRollups < ActiveRecord::Migration
   tag :predeploy
 
   def self.up
