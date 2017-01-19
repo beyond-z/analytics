@@ -50,9 +50,7 @@ define [
       # render now and any time the model changes or the window resizes
       @render()
       @afterRender()
-      @model.on 'change:student', =>
-        @render()
-        @afterRender()
+      @model.on 'change:student', @render
       $(window).on 'resize', _.debounce =>
         newWidth = util.computeGraphWidth()
         @pageViews.resize(width: newWidth)

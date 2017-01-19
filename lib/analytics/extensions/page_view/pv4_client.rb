@@ -42,11 +42,9 @@ module Analytics::Extensions::PageView::Pv4Client
 
     json = JSON.parse(response.body)
     Hash[json['users'].map do |entry|
-      user_id = Shard.relative_id_for(entry['user_id'], Shard.default, context.shard)
-      next unless user_ids.include?(user_id)
-      [user_id,
+      [Shard.relative_id_for(entry['user_id'], Shard.default, context.shard),
        { page_views: entry['page_views'], participations: entry['participations'] }]
-    end.compact]
+    end]
   end
 
   private

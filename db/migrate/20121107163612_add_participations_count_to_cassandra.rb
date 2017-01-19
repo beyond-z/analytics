@@ -1,4 +1,4 @@
-class AddParticipationsCountToCassandra < ActiveRecord::Migration[4.2]
+class AddParticipationsCountToCassandra < ActiveRecord::Migration
   tag :predeploy
 
   include Canvas::Cassandra::Migration

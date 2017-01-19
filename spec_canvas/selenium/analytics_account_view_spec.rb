@@ -38,7 +38,10 @@ describe "analytics account view" do
   it "should validate course drop down" do
     concluded_course = Course.create!(:name => 'concluded course', :account => Account.default)
     concluded_course.offer!
-    create_users_in_course(concluded_course, 10)
+    10.times do |i|
+      student = User.create!(:name => "test student #{i}")
+      concluded_course.enroll_user(student, 'StudentEnrollment').accept!
+    end
     concluded_course.complete
     go_to_analytics("/accounts/#{account_id}/analytics")
     data_points = %w(Courses Students)

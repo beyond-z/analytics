@@ -1,6 +1,6 @@
 require 'grade_distribution_cacher'
 
-class CacheGradeDistributions < ActiveRecord::Migration[4.2]
+class CacheGradeDistributions < ActiveRecord::Migration
   tag :postdeploy
 
   def self.up
